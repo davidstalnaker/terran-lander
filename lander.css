@@ -1,0 +1,25 @@
+.lander {
+	height: 50px;
+	width: 10px;
+	background-color: #eee;
+	position: absolute;
+	border-bottom: 5px solid #333;
+}
+
+.lander.firing {
+	border-bottom: 5px solid #e92;
+}
+
+.lander.exploded {
+	height: 100px;
+	width: 100px;
+	background-color: #e92;
+	border-radius: 50px;
+	margin-left: -50px;
+}
+
+body {
+	margin: 0;
+	background-color: #333;
+	border-bottom: 5px solid #555;
+}
