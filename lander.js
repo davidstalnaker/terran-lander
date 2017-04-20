@@ -14,42 +14,39 @@ class Lander {
 		this.ay = 0;
 		this.thrust = 0;
 		this.exploded = false;
+		this.stopSimulating = false;
 	}
 
 	step(timestep) {
+		this.ay = this.getAccelerationGravity() + this.getAccelerationGround();
 		if (this.getAccelerationEngines() > 0) {
-			this.ay = this.getAccelerationGravity() + Math.max(Math.min(this.getAccelerationEngines() + Math.random() - 0.5, MAX_THRUST / MASS), MAX_THRUST / MASS * MIN_THROTTLE)
-		} else {
-			this.ay = this.getAccelerationGravity();
+			this.ay += Math.max(Math.min(this.getAccelerationEngines() + Math.random() - 0.5, MAX_THRUST / MASS), MAX_THRUST / MASS * MIN_THROTTLE)
 		}
 		console.log([timestep, this.y, this.vy, this.ay, this.getAccelerationToStop()]);
 		if (this.exploded || this.ay > 100) {
 			this.exploded = true;
-			this.y = 0;
-			this.vy = 0;
-			this.vx = 0;
+			this.stopSimulating = true;
 		} else {
 			this.vy += this.ay * timestep / 1000;
 			this.y = this.y + this.vy * timestep / 1000;
 			this.x = this.x + this.vx * timestep / 1000;
-			if (this.ay == 0 && this.y < .01 && Math.abs(this.vy) < 3) {
-				this.vy = 0;
-				this.y = 0;
+			if (Math.abs(this.ay) < 0.01 && this.y < .01 && Math.abs(this.vy) < 3) {
+				this.stopSimulating = true;
 			}
 		}
 		this.redraw();
 	}
 
 	getAccelerationGravity() {
-		if (this.y < .01) {
-			if (this.vy < -3) {
-				return 1000;
-			} else {
-				return 0;
-			}
-		} else {
-			return -9.8;
+		return -9.8;
+	}
+
+	getAccelerationGround() {
+		let springA = -100 * this.y + 9.8;
+		if (springA > 0) {
+			return Math.max(springA - 20 * this.vy, 0);
 		}
+		return 0;
 	}
 
 	getAccelerationEngines() {
@@ -70,13 +67,12 @@ class Lander {
 			let idealA = maxA * .9;
 			let plannedA = this.getAccelerationToStop() + 9.8;
 			let deltaA = idealA - plannedA;
-
 			return plannedA - deltaA;
 		}
 	}
 
 	getAccelerationToStop() {
-		return this.vy * this.vy / (2 * this.y);
+		return this.vy * this.vy / (2 * (this.y - 0.1));
 	}
 
 	redraw() {
@@ -161,7 +157,7 @@ window.onload = () => {
 		currentTime = (new Date()).getTime();
 		timeStep = currentTime - lastFrameTime;
 		lastFrameTime = currentTime;
-		if (!l.exploded && l.y != 0) {
+		if (!l.stopSimulating) {
 			l.step(timeStep);
 			heightChart.data.datasets[0].data.push({x: (currentTime - startTime) / 1000, y: l.y});
 			heightChart.update();
