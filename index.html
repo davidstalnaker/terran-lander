@@ -1,9 +1,21 @@
 <html>
 	<head>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
 		<script src="lander.js"></script>
 		<link rel="stylesheet" href="lander.css" type="text/css">
 	</head>
 	<body>
-		<div class="lander"></div>
+		<div class="container">
+			<div class="telemetry">
+				<canvas class="telemetry-chart" id="heightChart" width="300" height="200"></canvas>
+				<canvas class="telemetry-chart" id="velocityChart" width="300" height="200"></canvas>
+				<canvas class="telemetry-chart" id="accelerationChart" width="300" height="200"></canvas>
+			</div>
+			<div class="world">
+				<div class="sky"></div>
+				<div class="ground"></div>
+				<div class="lander"></div>
+			</div>
+		</div>
 	</body>
 </html>

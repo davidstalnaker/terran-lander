@@ -1,30 +1,38 @@
 const SCALING_FACTOR = 1; // Pixels / Meter
 const MAX_THRUST = 750000; // Newtons
+const MIN_THROTTLE = 0.6
 const MASS = 25000; // Kilograms
 
 class Lander {
-	constructor(elem) {
-		this.elem = elem;
+	constructor(landerElem, worldElem) {
+		this.landerElem = landerElem;
+		this.worldElem = worldElem;
 		this.x = 0;
 		this.y = 1000; // Meters
 		this.vx = 0;
-		this.vy = -200;
+		this.vy = -150;
+		this.ay = 0;
+		this.thrust = 0;
 		this.exploded = false;
 	}
 
 	step(timestep) {
-		let a = this.getAccelerationGravity() + Math.max(Math.min(this.getAccelerationEngines(), MAX_THRUST / MASS), 0)
-		console.log([timestep, this.y, this.vy, a, this.getAccelerationToStop()]);
-		if (this.exploded || a > 100) {
+		if (this.getAccelerationEngines() > 0) {
+			this.ay = this.getAccelerationGravity() + Math.max(Math.min(this.getAccelerationEngines() + Math.random() - 0.5, MAX_THRUST / MASS), MAX_THRUST / MASS * MIN_THROTTLE)
+		} else {
+			this.ay = this.getAccelerationGravity();
+		}
+		console.log([timestep, this.y, this.vy, this.ay, this.getAccelerationToStop()]);
+		if (this.exploded || this.ay > 100) {
 			this.exploded = true;
 			this.y = 0;
 			this.vy = 0;
 			this.vx = 0;
 		} else {
-			this.vy += a * timestep / 1000;
+			this.vy += this.ay * timestep / 1000;
 			this.y = this.y + this.vy * timestep / 1000;
 			this.x = this.x + this.vx * timestep / 1000;
-			if (a == 0 && this.y < .01 && Math.abs(this.vy) < 1) {
+			if (this.ay == 0 && this.y < .01 && Math.abs(this.vy) < 3) {
 				this.vy = 0;
 				this.y = 0;
 			}
@@ -34,7 +42,7 @@ class Lander {
 
 	getAccelerationGravity() {
 		if (this.y < .01) {
-			if (this.vy < -1) {
+			if (this.vy < -3) {
 				return 1000;
 			} else {
 				return 0;
@@ -59,7 +67,11 @@ class Lander {
 				return 0;
 			}
 		} else {
-			return this.getAccelerationToStop() + 9.8;
+			let idealA = maxA * .9;
+			let plannedA = this.getAccelerationToStop() + 9.8;
+			let deltaA = idealA - plannedA;
+
+			return plannedA - deltaA;
 		}
 	}
 
@@ -68,26 +80,80 @@ class Lander {
 	}
 
 	redraw() {
-		const worldHeightPx = this.elem.parentElement.clientHeight;
-		const worldWidthPx = this.elem.parentElement.clientWidth;
+		const worldHeightPx = this.worldElem.clientHeight;
+		const worldWidthPx = this.worldElem.clientWidth;
 		const worldHeight = worldHeightPx / SCALING_FACTOR;
 		const worldWidth = worldWidthPx / SCALING_FACTOR;
-		this.elem.style.bottom = worldHeightPx - (worldHeight - this.y) / worldHeight * worldHeightPx;
-		this.elem.style.left = worldWidthPx * 0.5 + SCALING_FACTOR * this.x;
+		this.landerElem.style.bottom = worldHeightPx - (worldHeight - this.y) / worldHeight * worldHeightPx;
+		this.landerElem.style.left = worldWidthPx * 0.5 + SCALING_FACTOR * this.x;
 		if (this.exploded) {
-			this.elem.classList.add('exploded');
+			this.landerElem.classList.add('exploded');
 		}
 
 		if (this.firing) {
-			this.elem.classList.add('firing');
+			this.landerElem.classList.add('firing');
 		} else {
-			this.elem.classList.remove('firing');
+			this.landerElem.classList.remove('firing');
 		}
 	}
 }
 
+function createChart(elem, title) {
+	let chart = new Chart(elem, {
+		type: 'line',
+		data: {
+			datasets: [{
+				data: []
+			}]
+		},
+		options: {
+			title: {
+				display: true,
+				text: title
+			},
+			legend: {
+				display: false
+			},
+			responsive: false,
+	        scales: {
+	            xAxes: [{
+	                type: 'linear',
+	                position: 'bottom',
+	                ticks: {
+	                	suggestedMax: 10
+	                },
+		            gridLines: {
+		            	display: false
+		            }
+	            }],
+	            yAxes: [{
+	            	ticks: {
+	            		beginAtZero: true
+	            	},
+		            gridLines: {
+		            	display: false
+		            }
+	            }]
+	        },
+	        elements: {
+	        	point: {
+	        		radius: 1
+	        	},
+	        	line: {
+	        		fill: false
+	        	}
+	        }
+		}
+	});
+	return chart;
+}
+
 window.onload = () => {
-	let l = new Lander(document.querySelector('.lander'));
+	let heightChart = createChart(document.getElementById('heightChart'), "Height (m)");
+	let velocityChart = createChart(document.getElementById('velocityChart'), "Velocity (m/s)");
+	let accelerationChart = createChart(document.getElementById('accelerationChart'), "Acceleration (m/s^2)");
+
+	let l = new Lander(document.querySelector('.lander'), document.querySelector('.world'));
 
 	let startTime = (new Date()).getTime();
 	let lastFrameTime = startTime;
@@ -97,6 +163,12 @@ window.onload = () => {
 		lastFrameTime = currentTime;
 		if (!l.exploded && l.y != 0) {
 			l.step(timeStep);
+			heightChart.data.datasets[0].data.push({x: (currentTime - startTime) / 1000, y: l.y});
+			heightChart.update();
+			velocityChart.data.datasets[0].data.push({x: (currentTime - startTime) / 1000, y: l.vy});
+			velocityChart.update();
+			accelerationChart.data.datasets[0].data.push({x: (currentTime - startTime) / 1000, y: l.ay});
+			accelerationChart.update();
 		} else {
 			window.clearInterval(i);
 		}
