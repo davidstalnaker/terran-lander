@@ -8,33 +8,41 @@ class Lander {
 		this.landerElem = landerElem;
 		this.worldElem = worldElem;
 		this.landingController = landingController;
-		this.x = 0;
-		this.y = 1000; // Meters
-		this.vx = 0;
-		this.vy = -150;
-		this.ay = 0;
-		this.thrust = 0;
-		this.exploded = false;
-		this.stopSimulating = false;
+		this.log = [];
+		this.c = {
+			x: 0,
+			y: 1000,
+			vx: 0,
+			vy: -150,
+			ax: 0,
+			ay: 0,
+			thrust: 0,
+			exploded: false,
+			firing: false,
+			stopSimulating: false
+		};
 	}
 
 	step(timestep) {
-		this.ay = this.getAccelerationGravity() + this.getAccelerationGround();
-		if (this.getAccelerationEngines() > 0) {
-			this.ay += Math.max(Math.min(this.getAccelerationEngines() + Math.random() - 0.5, MAX_THRUST / MASS), MAX_THRUST / MASS * MIN_THROTTLE)
-		}
-		console.log([timestep, this.y, this.vy, this.ay, this.landingController.getAccelerationToStop(this)]);
-		if (this.exploded || this.ay > 100) {
+		this.c.timestep = timestep;
+		this.c.ay =
+		    this.getAccelerationGravity() +
+		    this.getAccelerationGround() +
+		    this.getAccelerationEngines();
+		if (this.exploded || this.c.ay > 100) {
 			this.exploded = true;
 			this.stopSimulating = true;
 		} else {
-			this.vy += this.ay * timestep / 1000;
-			this.y = this.y + this.vy * timestep / 1000;
-			this.x = this.x + this.vx * timestep / 1000;
-			if (Math.abs(this.ay) < 0.01 && this.y < .01 && Math.abs(this.vy) < 3) {
+			this.c.vy += this.c.ay * timestep / 1000;
+			this.c.y = this.c.y + this.c.vy * timestep / 1000;
+			this.c.x = this.c.x + this.c.vx * timestep / 1000;
+			if (Math.abs(this.c.ay) < 0.01 && this.c.y < .01 && Math.abs(this.c.vy) < 3) {
 				this.stopSimulating = true;
+				console.log(this.log);
 			}
 		}
+		this.log.push(this.c);
+		this.c = Object.assign({}, this.c);
 		this.redraw();
 	}
 
@@ -43,15 +51,24 @@ class Lander {
 	}
 
 	getAccelerationGround() {
-		let springA = -100 * this.y + 9.8;
+		let springA = -100 * this.c.y + 9.8;
 		if (springA > 0) {
-			return Math.max(springA - 20 * this.vy, 0);
+			return Math.max(springA - 20 * this.c.vy, 0);
 		}
 		return 0;
 	}
 
 	getAccelerationEngines() {
-		return this.landingController.getThrottle(this) * MAX_THRUST / MASS;
+		let requestedThrottle = this.landingController.getThrottle(this.c);
+		this.c.requestedThrottle = requestedThrottle;
+		if (requestedThrottle <= 0) {
+			this.c.throttle = 0;
+			return 0;
+		} else {
+			let actualThrottle = Math.max(Math.min(requestedThrottle, 1), MIN_THROTTLE);
+			this.c.throttle = actualThrottle;
+			return actualThrottle * MAX_THRUST / MASS;
+		}
 	}
 
 	redraw() {
@@ -59,13 +76,13 @@ class Lander {
 		const worldWidthPx = this.worldElem.clientWidth;
 		const worldHeight = worldHeightPx / SCALING_FACTOR;
 		const worldWidth = worldWidthPx / SCALING_FACTOR;
-		this.landerElem.style.bottom = worldHeightPx - (worldHeight - this.y) / worldHeight * worldHeightPx;
-		this.landerElem.style.left = worldWidthPx * 0.5 + SCALING_FACTOR * this.x;
-		if (this.exploded) {
+		this.landerElem.style.bottom = worldHeightPx - (worldHeight - this.c.y) / worldHeight * worldHeightPx;
+		this.landerElem.style.left = worldWidthPx * 0.5 + SCALING_FACTOR * this.c.x;
+		if (this.c.exploded) {
 			this.landerElem.classList.add('exploded');
 		}
 
-		if (this.firing) {
+		if (this.c.firing) {
 			this.landerElem.classList.add('firing');
 		} else {
 			this.landerElem.classList.remove('firing');
@@ -74,33 +91,27 @@ class Lander {
 }
 
 class LandingController {
-	getThrottle(lander) {
-		if (lander.vy > .01 || lander.y < .01) {
-			lander.firing = false;
-			return 0;
-		}
-
+	getThrottle(c) {
 		const maxA = MAX_THRUST / MASS;
-		if (!lander.firing) {
-			if (this.getAccelerationToStop(lander) + 9.8 < maxA * .9) {
-				return 0;
-			} else {
-				lander.firing = true;
-				return this.getAdjustedThrottle(lander);
-			}
+		let onGroundOrGoingUp = c.vy > .01 || c.y < .01;
+		let shouldStartFiring = this.getAccelerationToStop(c) + 9.8 > maxA * 0.9;
+		if (onGroundOrGoingUp || !(c.firing || shouldStartFiring)) {
+			c.firing = false;
+			return 0;
 		} else {
-			return this.getAdjustedThrottle(lander);
+			c.firing = true;
+			return this.getAdjustedThrottle(c);
 		}
 	}
 
-	getAccelerationToStop(lander) {
-		return lander.vy * lander.vy / (2 * (lander.y - 0.1));
+	getAccelerationToStop(c) {
+		return c.vy * c.vy / (2 * (c.y - 0.1));
 	}
 
-	getAdjustedThrottle(lander) {
+	getAdjustedThrottle(c) {
 		const maxA = MAX_THRUST / MASS;
 		let idealA = maxA * .9;
-		let plannedA = this.getAccelerationToStop(lander) + 9.8;
+		let plannedA = this.getAccelerationToStop(c) + 9.8;
 		let deltaA = idealA - plannedA;
 		let adjustedA = plannedA - deltaA;
 		return adjustedA * MASS / MAX_THRUST;
@@ -124,43 +135,71 @@ function createChart(elem, title) {
 				display: false
 			},
 			responsive: false,
-	        scales: {
-	            xAxes: [{
-	                type: 'linear',
-	                position: 'bottom',
-	                ticks: {
-	                	suggestedMax: 10
-	                },
-		            gridLines: {
-		            	display: false
-		            }
-	            }],
-	            yAxes: [{
-	            	ticks: {
-	            		beginAtZero: true
-	            	},
-		            gridLines: {
-		            	display: false
-		            }
-	            }]
-	        },
-	        elements: {
-	        	point: {
-	        		radius: 1
-	        	},
-	        	line: {
-	        		fill: false
-	        	}
-	        }
+			scales: {
+				xAxes: [{
+					type: 'linear',
+					position: 'bottom',
+					ticks: {
+						suggestedMax: 10
+					},
+					gridLines: {
+						display: false
+					}
+				}],
+				yAxes: [{
+					ticks: {
+						beginAtZero: true
+					},
+					gridLines: {
+						display: false
+					}
+				}]
+			},
+			elements: {
+				point: {
+					radius: 1
+				},
+				line: {
+					fill: false
+				}
+			}
 		}
 	});
 	return chart;
 }
 
+function createCharts(specs) {
+	let charts = [];
+	let telemetryContainer = document.querySelector('.telemetry');
+	for (let spec of specs) {
+		let chartElem = document.createElement('canvas');
+		chartElem.classList.add('telemetry-chart');
+		chartElem.setAttribute('height', '200');
+		chartElem.setAttribute('width', '300');
+		telemetryContainer.appendChild(chartElem);
+		charts.push({
+			chart: createChart(chartElem, spec.title),
+			value: spec.value
+		});
+	}
+	return charts;
+}
+
+function updateCharts(charts, c, time) {
+	for (let chart of charts) {
+		chart.chart.data.datasets[0].data.push({ x: time, y: chart.value(c) });
+		chart.chart.update();
+	}
+}
+
 window.onload = () => {
-	let heightChart = createChart(document.getElementById('heightChart'), "Height (m)");
-	let velocityChart = createChart(document.getElementById('velocityChart'), "Velocity (m/s)");
-	let accelerationChart = createChart(document.getElementById('accelerationChart'), "Acceleration (m/s^2)");
+	let charts = createCharts([
+		{ title: 'Height (m)', value: (c) => c.y },
+		{ title: 'Velocity (m/s)', value: (c) => c.vy },
+		{ title: 'Acceleration (m/s^2)', value: (c) => c.ay },
+		{ title: 'Requested Throttle Position', value: (c) => c.requestedThrottle },
+		{ title: 'Throttle Position', value: (c) => c.throttle }
+	]);
 
 	let l = new Lander(
 		document.querySelector('.lander'),
@@ -175,12 +214,7 @@ window.onload = () => {
 		lastFrameTime = currentTime;
 		if (!l.stopSimulating) {
 			l.step(timeStep);
-			heightChart.data.datasets[0].data.push({x: (currentTime - startTime) / 1000, y: l.y});
-			heightChart.update();
-			velocityChart.data.datasets[0].data.push({x: (currentTime - startTime) / 1000, y: l.vy});
-			velocityChart.update();
-			accelerationChart.data.datasets[0].data.push({x: (currentTime - startTime) / 1000, y: l.ay});
-			accelerationChart.update();
+			updateCharts(charts, l.c, (currentTime - startTime) / 1000);
 		} else {
 			window.clearInterval(i);
 		}
