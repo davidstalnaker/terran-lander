@@ -4,9 +4,10 @@ const MIN_THROTTLE = 0.6
 const MASS = 25000; // Kilograms
 
 class Lander {
-	constructor(landerElem, worldElem) {
+	constructor(landerElem, worldElem, landingController) {
 		this.landerElem = landerElem;
 		this.worldElem = worldElem;
+		this.landingController = landingController;
 		this.x = 0;
 		this.y = 1000; // Meters
 		this.vx = 0;
@@ -22,7 +23,7 @@ class Lander {
 		if (this.getAccelerationEngines() > 0) {
 			this.ay += Math.max(Math.min(this.getAccelerationEngines() + Math.random() - 0.5, MAX_THRUST / MASS), MAX_THRUST / MASS * MIN_THROTTLE)
 		}
-		console.log([timestep, this.y, this.vy, this.ay, this.getAccelerationToStop()]);
+		console.log([timestep, this.y, this.vy, this.ay, this.landingController.getAccelerationToStop(this)]);
 		if (this.exploded || this.ay > 100) {
 			this.exploded = true;
 			this.stopSimulating = true;
@@ -50,29 +51,7 @@ class Lander {
 	}
 
 	getAccelerationEngines() {
-		if (this.vy > .01 || this.y < .01) {
-			this.firing = false;
-			return 0;
-		}
-
-		const maxA = MAX_THRUST / MASS;
-		if (!this.firing) {
-			if (this.getAccelerationToStop() + 9.8 > maxA * .9) {
-				this.firing = true;
-				return this.getAccelerationToStop() + 9.8;
-			} else {
-				return 0;
-			}
-		} else {
-			let idealA = maxA * .9;
-			let plannedA = this.getAccelerationToStop() + 9.8;
-			let deltaA = idealA - plannedA;
-			return plannedA - deltaA;
-		}
-	}
-
-	getAccelerationToStop() {
-		return this.vy * this.vy / (2 * (this.y - 0.1));
+		return this.landingController.getThrottle(this) * MAX_THRUST / MASS;
 	}
 
 	redraw() {
@@ -91,6 +70,40 @@ class Lander {
 		} else {
 			this.landerElem.classList.remove('firing');
 		}
+	}
+}
+
+class LandingController {
+	getThrottle(lander) {
+		if (lander.vy > .01 || lander.y < .01) {
+			lander.firing = false;
+			return 0;
+		}
+
+		const maxA = MAX_THRUST / MASS;
+		if (!lander.firing) {
+			if (this.getAccelerationToStop(lander) + 9.8 < maxA * .9) {
+				return 0;
+			} else {
+				lander.firing = true;
+				return this.getAdjustedThrottle(lander);
+			}
+		} else {
+			return this.getAdjustedThrottle(lander);
+		}
+	}
+
+	getAccelerationToStop(lander) {
+		return lander.vy * lander.vy / (2 * (lander.y - 0.1));
+	}
+
+	getAdjustedThrottle(lander) {
+		const maxA = MAX_THRUST / MASS;
+		let idealA = maxA * .9;
+		let plannedA = this.getAccelerationToStop(lander) + 9.8;
+		let deltaA = idealA - plannedA;
+		let adjustedA = plannedA - deltaA;
+		return adjustedA * MASS / MAX_THRUST;
 	}
 }
 
@@ -149,7 +162,10 @@ window.onload = () => {
 	let velocityChart = createChart(document.getElementById('velocityChart'), "Velocity (m/s)");
 	let accelerationChart = createChart(document.getElementById('accelerationChart'), "Acceleration (m/s^2)");
 
-	let l = new Lander(document.querySelector('.lander'), document.querySelector('.world'));
+	let l = new Lander(
+		document.querySelector('.lander'),
+		document.querySelector('.world'),
+		new LandingController());
 
 	let startTime = (new Date()).getTime();
 	let lastFrameTime = startTime;
