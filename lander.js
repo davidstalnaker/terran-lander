@@ -5,6 +5,7 @@ const RCS_THRUST = 75000; // Newtons
 const MASS = 25000; // Kilograms
 const HEIGHT = 70; // Meters
 const RADIUS = 1.85; // Meters
+const INERTIA = MASS / 12 * (3 * RADIUS ** 2 + HEIGHT ** 2);
 
 class Lander {
 	constructor(landerElem, worldElem, landingController) {
@@ -15,9 +16,9 @@ class Lander {
 		this.c = {
 			x: 0,
 			y: 1000,
-			th: 0.5,
+			th: 1,
 			vx: 0,
-			vy: -150,
+			vy: -100,
 			vth: 0,
 			ax: 0,
 			ay: 0,
@@ -91,8 +92,7 @@ class Lander {
 
 	getRotationalAcceleration() {
 		let torque = this.landingController.getRcsThrottle(this.c) * RCS_THRUST * HEIGHT / 2;
-		let momentOfInertia = MASS / 12 * (3 * RADIUS ** 2 + HEIGHT ** 2);
-		return torque / momentOfInertia;
+		return torque / INERTIA;
 	}
 
 	redraw() {
@@ -134,7 +134,18 @@ class LandingController {
 	}
 
 	getRcsThrottle(c) {
-		return -1;
+		let forceToStop = this.getRotationalAccelerationToStop(c) * INERTIA / (HEIGHT / 2);
+
+		if (Math.abs(c.th) > .04 && Math.abs(forceToStop) < RCS_THRUST) {
+			return c.th > 0 ? -1 : 1;
+		} else {
+			return forceToStop / RCS_THRUST;
+		}
+
+	}
+
+	getRotationalAccelerationToStop(c) {
+		return c.vth * c.vth / (2 * c.th);
 	}
 
 	getAdjustedThrottle(c) {
