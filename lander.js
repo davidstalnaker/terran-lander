@@ -1,7 +1,10 @@
 const SCALING_FACTOR = 1; // Pixels / Meter
 const MAX_THRUST = 750000; // Newtons
-const MIN_THROTTLE = 0.6
+const MIN_THROTTLE = 0.6;
+const RCS_THRUST = 75000; // Newtons 
 const MASS = 25000; // Kilograms
+const HEIGHT = 70; // Meters
+const RADIUS = 1.85; // Meters
 
 class Lander {
 	constructor(landerElem, worldElem, landingController) {
@@ -12,10 +15,13 @@ class Lander {
 		this.c = {
 			x: 0,
 			y: 1000,
+			th: 0.5,
 			vx: 0,
 			vy: -150,
+			vth: 0,
 			ax: 0,
 			ay: 0,
+			ath: 0,
 			thrust: 0,
 			exploded: false,
 			firing: false,
@@ -28,21 +34,25 @@ class Lander {
 		this.c.ay =
 		    this.getAccelerationGravity() +
 		    this.getAccelerationGround() +
-		    this.getAccelerationEngines();
-		if (this.exploded || this.c.ay > 100) {
-			this.exploded = true;
-			this.stopSimulating = true;
-		} else {
-			this.c.vy += this.c.ay * timestep / 1000;
-			this.c.y = this.c.y + this.c.vy * timestep / 1000;
-			this.c.x = this.c.x + this.c.vx * timestep / 1000;
-			if (Math.abs(this.c.ay) < 0.01 && this.c.y < .01 && Math.abs(this.c.vy) < 3) {
-				this.stopSimulating = true;
-				console.log(this.log);
-			}
-		}
+		    this.getAccelerationEnginesY();
+		this.c.ax = this.getAccelerationEnginesX();
+		this.c.ath = this.getRotationalAcceleration();
+		this.c.vx += this.c.ax * timestep / 1000;
+		this.c.vy += this.c.ay * timestep / 1000;
+		this.c.vth += this.c.ath * timestep / 1000;
+		this.c.x += this.c.vx * timestep / 1000;
+		this.c.y += this.c.vy * timestep / 1000;
+		this.c.th += this.c.vth * timestep / 1000;
 		this.log.push(this.c);
 		this.c = Object.assign({}, this.c);
+		if (this.c.exploded || this.c.ay > 100) {
+			this.c.exploded = true;
+			this.stopSimulating = true;
+			console.log(this.log);
+		} else if (Math.abs(this.c.ay) < 0.01 && this.c.y < .01 && Math.abs(this.c.vy) < 3) {
+			this.stopSimulating = true;
+			console.log(this.log);
+		}
 		this.redraw();
 	}
 
@@ -58,7 +68,15 @@ class Lander {
 		return 0;
 	}
 
-	getAccelerationEngines() {
+	getAccelerationEnginesX() {
+		return this.getActualThrottle() * MAX_THRUST / MASS * Math.sin(this.c.th);
+	}
+
+	getAccelerationEnginesY() {
+		return this.getActualThrottle() * MAX_THRUST / MASS * Math.cos(this.c.th);
+	}
+
+	getActualThrottle() {
 		let requestedThrottle = this.landingController.getThrottle(this.c);
 		this.c.requestedThrottle = requestedThrottle;
 		if (requestedThrottle <= 0) {
@@ -67,8 +85,14 @@ class Lander {
 		} else {
 			let actualThrottle = Math.max(Math.min(requestedThrottle, 1), MIN_THROTTLE);
 			this.c.throttle = actualThrottle;
-			return actualThrottle * MAX_THRUST / MASS;
+			return actualThrottle;
 		}
+	}
+
+	getRotationalAcceleration() {
+		let torque = this.landingController.getRcsThrottle(this.c) * RCS_THRUST * HEIGHT / 2;
+		let momentOfInertia = MASS / 12 * (3 * RADIUS ** 2 + HEIGHT ** 2);
+		return torque / momentOfInertia;
 	}
 
 	redraw() {
@@ -78,6 +102,7 @@ class Lander {
 		const worldWidth = worldWidthPx / SCALING_FACTOR;
 		this.landerElem.style.bottom = worldHeightPx - (worldHeight - this.c.y) / worldHeight * worldHeightPx;
 		this.landerElem.style.left = worldWidthPx * 0.5 + SCALING_FACTOR * this.c.x;
+		this.landerElem.style.transform = 'rotate(' + this.c.th + 'rad)';
 		if (this.c.exploded) {
 			this.landerElem.classList.add('exploded');
 		}
@@ -106,6 +131,10 @@ class LandingController {
 
 	getAccelerationToStop(c) {
 		return c.vy * c.vy / (2 * (c.y - 0.1));
+	}
+
+	getRcsThrottle(c) {
+		return -1;
 	}
 
 	getAdjustedThrottle(c) {
@@ -194,11 +223,14 @@ function updateCharts(charts, c, time) {
 
 window.onload = () => {
 	let charts = createCharts([
+		{ title: 'Rotation (rad)', value: (c) => c.th },
+		{ title: 'Rotational Velocity (rad/s)', value: (c) => c.vth },
+		{ title: 'Rotational Acceleration (rad/s^2)', value: (c) => c.ath },
 		{ title: 'Height (m)', value: (c) => c.y },
 		{ title: 'Velocity (m/s)', value: (c) => c.vy },
-		{ title: 'Acceleration (m/s^2)', value: (c) => c.ay },
-		{ title: 'Requested Throttle Position', value: (c) => c.requestedThrottle },
-		{ title: 'Throttle Position', value: (c) => c.throttle }
+		{ title: 'Acceleration (m/s^2)', value: (c) => c.exploded ? undefined: c.ay }
+		// { title: 'Requested Throttle Position', value: (c) => c.requestedThrottle },
+		// { title: 'Throttle Position', value: (c) => c.throttle }
 	]);
 
 	let l = new Lander(
