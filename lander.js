@@ -10,6 +10,8 @@ const INERTIA = MASS / 12 * (3 * RADIUS ** 2 + HEIGHT ** 2);
 class Lander {
 	constructor(landerElem, worldElem, landingController) {
 		this.landerElem = landerElem;
+		this.rcsLeftElem = landerElem.querySelector('.lander-rcs-left');
+		this.rcsRightElem = landerElem.querySelector('.lander-rcs-right');
 		this.worldElem = worldElem;
 		this.landingController = landingController;
 		this.log = [];
@@ -91,7 +93,9 @@ class Lander {
 	}
 
 	getRotationalAcceleration() {
-		let torque = this.landingController.getRcsThrottle(this.c) * RCS_THRUST * HEIGHT / 2;
+		let throttle = this.landingController.getRcsThrottle(this.c);
+		this.c.rcsThrottle = throttle;
+		let torque = throttle * RCS_THRUST * HEIGHT / 2;
 		return torque / INERTIA;
 	}
 
@@ -111,6 +115,17 @@ class Lander {
 			this.landerElem.classList.add('firing');
 		} else {
 			this.landerElem.classList.remove('firing');
+		}
+
+		if (this.c.rcsThrottle < -0.1) {
+			this.rcsLeftElem.classList.remove('firing');
+			this.rcsRightElem.classList.add('firing');
+		} else if (this.c.rcsThrottle > 0.1) {
+			this.rcsLeftElem.classList.add('firing');
+			this.rcsRightElem.classList.remove('firing');
+		} else {
+			this.rcsLeftElem.classList.remove('firing');
+			this.rcsRightElem.classList.remove('firing');
 		}
 	}
 }
