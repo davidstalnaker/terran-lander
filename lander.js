@@ -17,10 +17,10 @@ class Lander {
 		this.log = [];
 		this.c = {
 			x: 0,
-			y: 1000,
+			y: 500,
 			th: 1,
 			vx: 0,
-			vy: -100,
+			vy: -50,
 			vth: 0,
 			ax: 0,
 			ay: 0,
@@ -93,10 +93,21 @@ class Lander {
 	}
 
 	getRotationalAcceleration() {
-		let throttle = this.landingController.getRcsThrottle(this.c);
+		let throttle = this.getRotationalThrottle();
 		this.c.rcsThrottle = throttle;
 		let torque = throttle * RCS_THRUST * HEIGHT / 2;
 		return torque / INERTIA;
+	}
+
+	getRotationalThrottle() {
+		this.c.requestedRcsThrottle = this.landingController.getRcsThrottle(this.c);
+		if (this.c.requestedRcsThrottle < -0.1) {
+			return -1;
+		} else if (this.c.requestedRcsThrottle > 0.1) {
+			return 1;
+		} else {
+			return 0;
+		}
 	}
 
 	redraw() {
@@ -149,12 +160,15 @@ class LandingController {
 	}
 
 	getRcsThrottle(c) {
+		c.rotAToStop = this.getRotationalAccelerationToStop(c);
 		let forceToStop = this.getRotationalAccelerationToStop(c) * INERTIA / (HEIGHT / 2);
 
-		if (Math.abs(c.th) > .04 && Math.abs(forceToStop) < RCS_THRUST) {
+		if (Math.abs(c.th) < 0.01 && Math.abs(c.vth) < 0.01) {
+			return 0;
+		} else if (Math.abs(forceToStop) < RCS_THRUST) {
 			return c.th > 0 ? -1 : 1;
 		} else {
-			return forceToStop / RCS_THRUST;
+			return c.vth < 0 ? 1 : -1;
 		}
 
 	}
@@ -252,11 +266,12 @@ window.onload = () => {
 		{ title: 'Rotation (rad)', value: (c) => c.th },
 		{ title: 'Rotational Velocity (rad/s)', value: (c) => c.vth },
 		{ title: 'Rotational Acceleration (rad/s^2)', value: (c) => c.ath },
+		{ title: 'Rotational Acceleration to stop (rad/s^2)', value: (c) => c.rotAToStop },
+		{ title: 'Requested Throttle Position', value: (c) => c.requestedRcsThrottle },
+		{ title: 'Throttle Position', value: (c) => c.rcsThrottle },
 		{ title: 'Height (m)', value: (c) => c.y },
 		{ title: 'Velocity (m/s)', value: (c) => c.vy },
 		{ title: 'Acceleration (m/s^2)', value: (c) => c.exploded ? undefined: c.ay }
-		// { title: 'Requested Throttle Position', value: (c) => c.requestedThrottle },
-		// { title: 'Throttle Position', value: (c) => c.throttle }
 	]);
 
 	let l = new Lander(
