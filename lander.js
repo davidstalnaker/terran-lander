@@ -8,12 +8,12 @@ const RADIUS = 1.85; // Meters
 const INERTIA = MASS / 12 * (3 * RADIUS ** 2 + HEIGHT ** 2);
 
 class Lander {
-	constructor(landerElem, worldElem, landingController) {
+	constructor(landerElem, worldElem, landingProgram) {
 		this.landerElem = landerElem;
 		this.rcsLeftElem = landerElem.querySelector('.lander-rcs-left');
 		this.rcsRightElem = landerElem.querySelector('.lander-rcs-right');
 		this.worldElem = worldElem;
-		this.landingController = landingController;
+		this.landingProgram = landingProgram;
 		this.log = [];
 		this.c = {
 			x: 0,
@@ -80,7 +80,7 @@ class Lander {
 	}
 
 	getActualThrottle() {
-		let requestedThrottle = this.landingController.getThrottle(this.c);
+		let requestedThrottle = this.landingProgram.getThrottle(this.c);
 		this.c.requestedThrottle = requestedThrottle;
 		if (requestedThrottle <= 0) {
 			this.c.throttle = 0;
@@ -100,7 +100,7 @@ class Lander {
 	}
 
 	getRotationalThrottle() {
-		this.c.requestedRcsThrottle = this.landingController.getRcsThrottle(this.c);
+		this.c.requestedRcsThrottle = this.landingProgram.getRcsThrottle(this.c);
 		if (this.c.requestedRcsThrottle < -0.1) {
 			return -1;
 		} else if (this.c.requestedRcsThrottle > 0.1) {
@@ -141,51 +141,6 @@ class Lander {
 	}
 }
 
-class LandingController {
-	getThrottle(c) {
-		const maxA = MAX_THRUST / MASS;
-		let onGroundOrGoingUp = c.vy > .01 || c.y < .01;
-		let shouldStartFiring = this.getAccelerationToStop(c) + 9.8 > maxA * 0.9;
-		if (onGroundOrGoingUp || !(c.firing || shouldStartFiring)) {
-			c.firing = false;
-			return 0;
-		} else {
-			c.firing = true;
-			return this.getAdjustedThrottle(c);
-		}
-	}
-
-	getAccelerationToStop(c) {
-		return c.vy * c.vy / (2 * (c.y - 0.1));
-	}
-
-	getRcsThrottle(c) {
-		c.rotAToStop = this.getRotationalAccelerationToStop(c);
-		let forceToStop = this.getRotationalAccelerationToStop(c) * INERTIA / (HEIGHT / 2);
-
-		if (Math.abs(c.th) < 0.01 && Math.abs(c.vth) < 0.01) {
-			return 0;
-		} else if (Math.abs(forceToStop) < RCS_THRUST) {
-			return c.th > 0 ? -1 : 1;
-		} else {
-			return c.vth < 0 ? 1 : -1;
-		}
-
-	}
-
-	getRotationalAccelerationToStop(c) {
-		return c.vth * c.vth / (2 * c.th);
-	}
-
-	getAdjustedThrottle(c) {
-		const maxA = MAX_THRUST / MASS;
-		let idealA = maxA * .9;
-		let plannedA = this.getAccelerationToStop(c) + 9.8;
-		let deltaA = idealA - plannedA;
-		let adjustedA = plannedA - deltaA;
-		return adjustedA * MASS / MAX_THRUST;
-	}
-}
 
 function createChart(elem, title) {
 	let chart = new Chart(elem, {
@@ -277,7 +232,7 @@ window.onload = () => {
 	let l = new Lander(
 		document.querySelector('.lander'),
 		document.querySelector('.world'),
-		new LandingController());
+		new LandingProgram());
 
 	let startTime = (new Date()).getTime();
 	let lastFrameTime = startTime;
