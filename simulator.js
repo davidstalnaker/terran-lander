@@ -79,11 +79,43 @@ class Simulator {
             .then((response) => response.text())
             .then((text) => editor.innerText = text);
     }
+
+    setUpButtons() {
+        let runButton = document.getElementById('run-button');
+        runButton.onclick = () => this.resetLander();
+    }
+
+    setUpLander() {
+        this.lander = new Lander(
+            document.querySelector('.lander'),
+            document.querySelector('.world'),
+            new LandingProgram());
+
+        this.lastFrameTime = this.startTime = (new Date()).getTime();
+        this.landerInterval = window.setInterval(() => {
+            let currentTime = (new Date()).getTime();
+            let timeStep = currentTime - this.lastFrameTime;
+            this.lastFrameTime = currentTime;
+            if (!this.lander.stopSimulating) {
+                this.lander.step(timeStep);
+                this.updateCharts(this.charts, this.lander.c, (currentTime - this.startTime) / 1000);
+            } else {
+                window.clearInterval(this.landerInterval);
+            }
+        }, 33);
+    }
+    
+    resetLander() {
+        window.clearInterval(this.landerInterval);
+        this.setUpLander();
+    }
     
     constructor() {
         this.setUpEditor();
+        this.setUpButtons();
+        this.setUpLander();
 
-        let charts = this.createCharts([
+        this.charts = this.createCharts([
             { title: 'Rotation (rad)', value: (c) => c.th },
             { title: 'Rotational Velocity (rad/s)', value: (c) => c.vth },
             { title: 'Rotational Acceleration (rad/s^2)', value: (c) => c.ath },
@@ -95,24 +127,6 @@ class Simulator {
             { title: 'Acceleration (m/s^2)', value: (c) => c.exploded ? undefined: c.ay }
         ]);
 
-        let l = new Lander(
-            document.querySelector('.lander'),
-            document.querySelector('.world'),
-            new LandingProgram());
-
-        let startTime = (new Date()).getTime();
-        let lastFrameTime = startTime;
-        let i = window.setInterval(() => {
-            let currentTime = (new Date()).getTime();
-            let timeStep = currentTime - lastFrameTime;
-            lastFrameTime = currentTime;
-            if (!l.stopSimulating) {
-                l.step(timeStep);
-                this.updateCharts(charts, l.c, (currentTime - startTime) / 1000);
-            } else {
-                window.clearInterval(i);
-            }
-        }, 33);
     }
 }
 
