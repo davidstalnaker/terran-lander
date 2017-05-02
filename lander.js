@@ -217,6 +217,11 @@ function updateCharts(charts, c, time) {
 }
 
 window.onload = () => {
+	let editor = document.querySelector('.editor-container textarea');
+	fetch('landingprogram.js')
+		.then((response) => response.text())
+		.then((text) => editor.innerText = text);
+
 	let charts = createCharts([
 		{ title: 'Rotation (rad)', value: (c) => c.th },
 		{ title: 'Rotational Velocity (rad/s)', value: (c) => c.vth },
